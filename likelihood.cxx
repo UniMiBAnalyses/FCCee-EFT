@@ -207,6 +207,8 @@ void likelihood(TString name_file = "input.root",
     line->Draw();
   }
 
+  cc_scan->SaveAs("scan.png");
+
 
   //---- plot: inputs
 
