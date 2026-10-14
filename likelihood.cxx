@@ -152,10 +152,38 @@ void likelihood(TString name_file = "input.root",
     }
   }
 
+  std::cout << " grid:    min -2lnL = " << min_m2lnL << " at C = " << c_best << std::endl;
+
+
+  //---- minimum: refine the grid minimum with a 1D minimisation (Brent)
+  //     between the two grid points around c_best
+  //     (with Asimov SM data the minimum is at C = 0, on the grid if the grid is symmetric with odd n_points,
+  //      but in general it is in between two grid points)
+
+  TF1* f_m2lnL = new TF1 ("f_m2lnL", [&] (double* x, double* p) { return minus2LogL (x[0]); }, c_min, c_max, 0);
+
+  double step = (c_max - c_min) / (n_points - 1);
+  double c_low  = std::max (double(c_min), c_best - step);
+  double c_high = std::min (double(c_max), c_best + step);
+
+  c_best    = f_m2lnL->GetMinimumX (c_low, c_high);
+  min_m2lnL = minus2LogL (c_best);
+
+  std::cout << " refined: min -2lnL = " << min_m2lnL << " at C = " << c_best << std::endl;
+
+  if (c_best - c_min < step || c_max - c_best < step) {
+    std::cout << " WARNING: minimum at the edge of the scan range --> enlarge the range" << std::endl;
+  }
+
+
+  //---- shift: -2DlnL = -2lnL - min(-2lnL), so the minimum of the curve is at 0
+
   TGraph* gr_scan = new TGraph ();
   for (int iPoint = 0; iPoint < n_points; iPoint++) {
     gr_scan->SetPoint(iPoint, v_c[iPoint], v_m2lnL[iPoint] - min_m2lnL);
   }
+  gr_scan->SetPoint(n_points, c_best, 0.);   // add the minimum itself
+  gr_scan->Sort();
 
   std::cout << " best fit C = " << c_best << std::endl;
 
