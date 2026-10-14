@@ -34,7 +34,11 @@ With your own file and histograms:
 Output:
 
     best fit C, crossings at -2DlnL = 1 (68% CL) and 3.84 (95% CL), on screen
-    canvas cc_scan:   -2 DlnL vs C
+    canvas cc_scan:   -2 DlnL vs C (also saved as scan.png)
     canvas cc_inputs: the 3 input histograms
 
 NB: if no crossing is found, enlarge the C range.
+
+Example, with the test input (best fit C = 0, 68% CL [-0.349, 0.297], 95% CL [-0.781, 0.551]):
+
+![likelihood scan](images/likelihood-scan.png)
