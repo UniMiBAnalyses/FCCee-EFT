@@ -83,6 +83,31 @@ void likelihood(TString name_file = "input.root",
 
 
   //---- -2 lnL
+  //
+  // Where is the Poisson? And the factorial?
+  //
+  //    Pois(n|mu) = mu^n * exp(-mu) / n!
+  //
+  // We use the ratio to the saturated model, i.e. the same Poisson evaluated at mu = n:
+  //
+  //    Pois(n|mu) / Pois(n|n) = [ mu^n exp(-mu) / n! ] / [ n^n exp(-n) / n! ]
+  //                           = (mu/n)^n * exp(-(mu-n))
+  //
+  //    --> the n! cancels (same n = data above and below)
+  //
+  //    -2 ln [ Pois(n|mu) / Pois(n|n) ] = 2 * [ mu - n + n * ln(n/mu) ]
+  //
+  // and the -2lnL of the product of Poisson is the sum over bins of this.
+  //
+  // The denominator, Pois(n|n), depends only on data, not on C:
+  // it is a constant shift of -2lnL and it cancels in -2DlnL = -2lnL(C) - min(-2lnL).
+  // --> scan, best fit and intervals are identical to the explicit Poisson version (commented below).
+  //
+  // Why this form:
+  //   - no n! --> fine also with non-integer n (Asimov data = SM yields, e.g. 670.32)
+  //   - sum of logs, no product of small numbers --> no numerical underflow with many bins / large n
+  //   - -2lnL = 0 when mu = n
+  //
 
   auto minus2LogL = [&] (double c) {
     double value = 0.;
@@ -95,6 +120,15 @@ void likelihood(TString name_file = "input.root",
       }
       value += 2. * (mu - n);
       if (n > 0) value += 2. * n * log (n / mu);
+
+      //
+      // explicit Poisson version, equivalent for -2DlnL:
+      //   TMath::Poisson(n, mu) = mu^n exp(-mu) / Gamma(n+1), i.e. n! --> Gamma(n+1), works for non-integer n
+      //   NB: -2lnL is shifted by a constant (min not at 0 any more), and for large n the Poisson
+      //       can become very small: the log of the product is safe only as sum of logs, as done here
+      //
+//       value += -2. * log (TMath::Poisson(n, mu));
+
     }
     return value;
   };
