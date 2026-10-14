@@ -1,0 +1,191 @@
+//
+// likelihood scan for one EFT Wilson coefficient C
+//
+//   root -l likelihood.cxx
+//   root -l 'likelihood.cxx("input.root", "histo_SM", "histo_cP1", "histo_cM1", -1, 1, 201)'
+//
+// Model, bin by bin (as in AnalyticAnomalousCoupling):
+//
+//    N(C) = SM + C * L + C^2 * Q
+//
+// with L and Q obtained from the histograms at C = +1 and C = -1:
+//
+//    N(+1) = SM + L + Q
+//    N(-1) = SM - L + Q
+//    -->  L = ( N(+1) - N(-1) ) / 2
+//    -->  Q = ( N(+1) + N(-1) ) / 2 - SM
+//
+// Data = SM histogram (Asimov)
+//
+// Likelihood = product of Poisson, normalised to the saturated model:
+//
+//    -2 lnL(C) = 2 * sum_i [ N_i(C) - n_i + n_i * ln( n_i / N_i(C) ) ]
+//
+
+
+void likelihood(TString name_file = "input.root",
+                TString name_SM   = "histo_SM",
+                TString name_cP1  = "histo_cP1",
+                TString name_cM1  = "histo_cM1",
+                float c_min = -1.,
+                float c_max =  1.,
+                int n_points = 201
+               ) {
+
+  gStyle->SetOptStat(0);
+
+  //---- input
+
+  TFile* f_input = new TFile (name_file, "READ");
+  if (!f_input || f_input->IsZombie()) {
+    std::cout << " file not found: " << name_file << std::endl;
+    return;
+  }
+
+  TH1* h_SM  = (TH1*) f_input->Get(name_SM);
+  TH1* h_cP1 = (TH1*) f_input->Get(name_cP1);
+  TH1* h_cM1 = (TH1*) f_input->Get(name_cM1);
+
+  if (!h_SM || !h_cP1 || !h_cM1) {
+    std::cout << " histogram not found: " << name_SM << " " << name_cP1 << " " << name_cM1 << std::endl;
+    return;
+  }
+
+  int n_bins = h_SM->GetNbinsX();
+  if (h_cP1->GetNbinsX() != n_bins || h_cM1->GetNbinsX() != n_bins) {
+    std::cout << " different number of bins! " << std::endl;
+    return;
+  }
+
+
+  //---- algebra: linear and quadratic components
+
+  TH1* h_lin = (TH1*) h_cP1->Clone("h_lin");
+  h_lin->Add(h_cM1, -1.);
+  h_lin->Scale(0.5);
+
+  TH1* h_quad = (TH1*) h_cP1->Clone("h_quad");
+  h_quad->Add(h_cM1);
+  h_quad->Scale(0.5);
+  h_quad->Add(h_SM, -1.);
+
+  std::cout << " SM    = " << h_SM->Integral()   << std::endl;
+  std::cout << " C=+1  = " << h_cP1->Integral()  << std::endl;
+  std::cout << " C=-1  = " << h_cM1->Integral()  << std::endl;
+  std::cout << " lin   = " << h_lin->Integral()  << std::endl;
+  std::cout << " quad  = " << h_quad->Integral() << std::endl;
+
+  for (int iBin = 1; iBin <= n_bins; iBin++) {
+    if (h_quad->GetBinContent(iBin) < 0) {
+      std::cout << " WARNING: negative quadratic term in bin " << iBin << " = " << h_quad->GetBinContent(iBin) << std::endl;
+    }
+  }
+
+
+  //---- -2 lnL
+
+  auto minus2LogL = [&] (double c) {
+    double value = 0.;
+    for (int iBin = 1; iBin <= n_bins; iBin++) {
+      double n  = h_SM->GetBinContent(iBin);
+      double mu = h_SM->GetBinContent(iBin) + c * h_lin->GetBinContent(iBin) + c * c * h_quad->GetBinContent(iBin);
+      if (mu <= 0) {
+        if (n > 0) return 1.e9;   // expectation <= 0 with observed events: not allowed
+        continue;
+      }
+      value += 2. * (mu - n);
+      if (n > 0) value += 2. * n * log (n / mu);
+    }
+    return value;
+  };
+
+
+  //---- scan
+
+  std::vector<double> v_c;
+  std::vector<double> v_m2lnL;
+  double min_m2lnL = 1.e9;
+  double c_best = 0.;
+
+  for (int iPoint = 0; iPoint < n_points; iPoint++) {
+    double c = c_min + (c_max - c_min) * iPoint / (n_points - 1);
+    double value = minus2LogL (c);
+    v_c.push_back(c);
+    v_m2lnL.push_back(value);
+    if (value < min_m2lnL) {
+      min_m2lnL = value;
+      c_best = c;
+    }
+  }
+
+  TGraph* gr_scan = new TGraph ();
+  for (int iPoint = 0; iPoint < n_points; iPoint++) {
+    gr_scan->SetPoint(iPoint, v_c[iPoint], v_m2lnL[iPoint] - min_m2lnL);
+  }
+
+  std::cout << " best fit C = " << c_best << std::endl;
+
+
+  //---- intervals (Wilks, 1 dof): 68% CL -> 1.00, 95% CL -> 3.84
+
+  std::vector<double> thresholds = {1.00, 3.84};
+  std::vector<TString> names_CL = {"68% CL", "95% CL"};
+
+  for (int iThreshold = 0; iThreshold < thresholds.size(); iThreshold++) {
+    std::cout << " " << names_CL[iThreshold] << " (-2DlnL = " << thresholds[iThreshold] << ") crossings: ";
+    int n_crossings = 0;
+    for (int iPoint = 0; iPoint < n_points-1; iPoint++) {
+      double y1 = v_m2lnL[iPoint]   - min_m2lnL - thresholds[iThreshold];
+      double y2 = v_m2lnL[iPoint+1] - min_m2lnL - thresholds[iThreshold];
+      if (y1 * y2 < 0) {
+        double c_cross = v_c[iPoint] + (v_c[iPoint+1] - v_c[iPoint]) * (-y1) / (y2 - y1);
+        std::cout << "  " << c_cross;
+        n_crossings++;
+      }
+    }
+    if (n_crossings == 0) std::cout << "  none in [" << c_min << ", " << c_max << "] --> enlarge the range";
+    std::cout << std::endl;
+  }
+
+
+  //---- plot: scan
+
+  TCanvas* cc_scan = new TCanvas ("cc_scan", "scan", 800, 600);
+  gr_scan->SetLineColor(kBlue);
+  gr_scan->SetLineWidth(2);
+  gr_scan->SetTitle("");
+  gr_scan->GetXaxis()->SetTitle("C");
+  gr_scan->GetYaxis()->SetTitle("-2 #Delta lnL");
+  gr_scan->Draw("AL");
+
+  for (auto threshold : thresholds) {
+    TLine* line = new TLine (c_min, threshold, c_max, threshold);
+    line->SetLineStyle(2);
+    line->SetLineColor(kRed);
+    line->Draw();
+  }
+
+
+  //---- plot: inputs
+
+  TCanvas* cc_inputs = new TCanvas ("cc_inputs", "inputs", 800, 600);
+  h_SM->SetLineColor(kBlack);
+  h_cP1->SetLineColor(kRed);
+  h_cM1->SetLineColor(kBlue);
+  h_SM->SetLineWidth(2);
+  h_cP1->SetLineWidth(2);
+  h_cM1->SetLineWidth(2);
+
+  h_cP1->Draw("histo");
+  h_cM1->Draw("histo same");
+  h_SM->Draw("histo same");
+
+  TLegend* leg = new TLegend (0.70, 0.70, 0.88, 0.88);
+  leg->AddEntry(h_SM,  "SM",   "l");
+  leg->AddEntry(h_cP1, "C=+1", "l");
+  leg->AddEntry(h_cM1, "C=-1", "l");
+  leg->Draw();
+
+  std::cout << " I'm done " << std::endl;
+
+}
