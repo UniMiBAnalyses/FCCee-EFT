@@ -18,6 +18,10 @@ Create test input (input.root with histo_SM, histo_cP1, histo_cM1):
 
     root -l -b -q createTestInput.cxx
 
+Draw the input histograms (also saved as input.png):
+
+    root -l drawInput.cxx
+
 Run (default: input.root, histo_SM, histo_cP1, histo_cM1, C in [-1, 1], 201 points):
 
     root -l likelihood.cxx
