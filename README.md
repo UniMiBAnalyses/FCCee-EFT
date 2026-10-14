@@ -14,7 +14,8 @@ Input: 3 histograms, SM, C=+1, C=-1. Model, bin by bin:
 
 with L and Q extracted from C=+1 and C=-1. Data = SM (Asimov).
 
-Create test input (input.root with histo_SM, histo_cP1, histo_cM1):
+Create test input (input.root with histo_SM, histo_cP1, histo_cM1).
+NB: root files are not in the repository, create it first:
 
     root -l -b -q createTestInput.cxx
 
