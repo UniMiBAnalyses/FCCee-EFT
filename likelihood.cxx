@@ -138,24 +138,32 @@ void likelihood(TString name_file = "input.root",
 
   std::vector<double> v_c;
   std::vector<double> v_m2lnL;
-  double min_m2lnL = 1.e9;
-  double c_best = 0.;
 
   for (int iPoint = 0; iPoint < n_points; iPoint++) {
     double c = c_min + (c_max - c_min) * iPoint / (n_points - 1);
-    double value = minus2LogL (c);
     v_c.push_back(c);
-    v_m2lnL.push_back(value);
-    if (value < min_m2lnL) {
-      min_m2lnL = value;
-      c_best = c;
-    }
+    v_m2lnL.push_back(minus2LogL (c));
   }
+
+
+  //---- minimum of -2lnL in [c_min, c_max]
+
+  TF1* f_m2lnL = new TF1 ("f_m2lnL", [&] (double* x, double* p) { return minus2LogL (x[0]); }, c_min, c_max, 0);
+
+  double c_best    = f_m2lnL->GetMinimumX (c_min, c_max);
+  double min_m2lnL = minus2LogL (c_best);
+
+  std::cout << " min -2lnL = " << min_m2lnL << " at C = " << c_best << std::endl;
+
+
+  //---- shift: -2DlnL = -2lnL - min(-2lnL), so the minimum of the curve is at 0
 
   TGraph* gr_scan = new TGraph ();
   for (int iPoint = 0; iPoint < n_points; iPoint++) {
     gr_scan->SetPoint(iPoint, v_c[iPoint], v_m2lnL[iPoint] - min_m2lnL);
   }
+  gr_scan->SetPoint(n_points, c_best, 0.);   // add the minimum itself
+  gr_scan->Sort();
 
   std::cout << " best fit C = " << c_best << std::endl;
 
