@@ -138,42 +138,22 @@ void likelihood(TString name_file = "input.root",
 
   std::vector<double> v_c;
   std::vector<double> v_m2lnL;
-  double min_m2lnL = 1.e9;
-  double c_best = 0.;
 
   for (int iPoint = 0; iPoint < n_points; iPoint++) {
     double c = c_min + (c_max - c_min) * iPoint / (n_points - 1);
-    double value = minus2LogL (c);
     v_c.push_back(c);
-    v_m2lnL.push_back(value);
-    if (value < min_m2lnL) {
-      min_m2lnL = value;
-      c_best = c;
-    }
+    v_m2lnL.push_back(minus2LogL (c));
   }
 
-  std::cout << " grid:    min -2lnL = " << min_m2lnL << " at C = " << c_best << std::endl;
 
-
-  //---- minimum: refine the grid minimum with a 1D minimisation (Brent)
-  //     between the two grid points around c_best
-  //     (with Asimov SM data the minimum is at C = 0, on the grid if the grid is symmetric with odd n_points,
-  //      but in general it is in between two grid points)
+  //---- minimum of -2lnL in [c_min, c_max]
 
   TF1* f_m2lnL = new TF1 ("f_m2lnL", [&] (double* x, double* p) { return minus2LogL (x[0]); }, c_min, c_max, 0);
 
-  double step = (c_max - c_min) / (n_points - 1);
-  double c_low  = std::max (double(c_min), c_best - step);
-  double c_high = std::min (double(c_max), c_best + step);
+  double c_best    = f_m2lnL->GetMinimumX (c_min, c_max);
+  double min_m2lnL = minus2LogL (c_best);
 
-  c_best    = f_m2lnL->GetMinimumX (c_low, c_high);
-  min_m2lnL = minus2LogL (c_best);
-
-  std::cout << " refined: min -2lnL = " << min_m2lnL << " at C = " << c_best << std::endl;
-
-  if (c_best - c_min < step || c_max - c_best < step) {
-    std::cout << " WARNING: minimum at the edge of the scan range --> enlarge the range" << std::endl;
-  }
+  std::cout << " min -2lnL = " << min_m2lnL << " at C = " << c_best << std::endl;
 
 
   //---- shift: -2DlnL = -2lnL - min(-2lnL), so the minimum of the curve is at 0
